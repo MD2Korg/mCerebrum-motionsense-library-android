@@ -36,7 +36,7 @@ import io.reactivex.schedulers.Timed;
  */
 public class DataQualityAccelerometer extends DataQuality {
     private final static float MAGNITUDE_VARIANCE_THRESHOLD = (float) 0.01;   //this threshold comes from the data we collect by placing the wrist sensor on table. It compares with the wrist accelerometer on-body from participant #11 (smoking pilot study)
-    private static final int DELAY = 3000;
+    public static final int DELAY = 3000;
     private ArrayList<Double> samples=new ArrayList<>();
 
     @Override

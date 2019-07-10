@@ -51,7 +51,6 @@ public class Data {
     public<T> T getSample() {
         return (T) sample;
     }
-
     public DeviceInfo getDeviceInfo() {
         return deviceInfo;
     }
@@ -70,6 +69,6 @@ public class Data {
                 sampleStr+=","+ s[i];
             }
         }
-        return deviceInfo.getDeviceId()+","+sensorType.name()+",["+sampleStr+"]";
+        return deviceInfo.getDeviceId()+","+sensorType.name()+","+sampleStr;
     }
 }

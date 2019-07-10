@@ -26,6 +26,6 @@ package org.md2k.motionsenselibrary.device;
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-public interface ScanCallback {
-    void onReceive(String deviceName, String deviceId);
+public interface VersionCallback {
+    void onReceive(Version version);
 }

@@ -32,14 +32,39 @@ public class Version {
     private int minor;
     private DeviceType type;
     private int patch;
+    public Version(String versionStr){
+        String[] split = versionStr.split("\\.");
+        this.major = Integer.parseInt(split[0]);
+        this.minor = Integer.parseInt(split[1]);
+        this.type = DeviceType.getDeviceType(Integer.parseInt(split[2]));
+        this.patch = Integer.parseInt(split[3]);
+    }
     public Version(DeviceType deviceType, int major, int minor, int patch){
         this.type = deviceType;
         this.major = major;
         this.minor = minor;
         this.patch = patch;
     }
+    public boolean isVersion1(){
+        return major==1;
+    }
+    public boolean isVersion2(){
+        return major!=1;
+    }
 
-    DeviceType getType() {
+    public int getMajor() {
+        return major;
+    }
+
+    public int getMinor() {
+        return minor;
+    }
+
+    public int getPatch() {
+        return patch;
+    }
+
+    public DeviceType getType() {
         return type;
     }
 

@@ -2,17 +2,22 @@ package org.md2k.motionsenselibrary.device;
 
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+
 import com.polidea.rxandroidble2.RxBleClient;
 import com.polidea.rxandroidble2.RxBleConnection;
 import com.polidea.rxandroidble2.RxBleDevice;
 import com.polidea.rxandroidble2.scan.ScanResult;
 
-import org.md2k.motionsenselibrary.device.motion_sense.MotionSense;
-import org.md2k.motionsenselibrary.device.motion_sense_hrv.MotionSenseHrv;
-import org.md2k.motionsenselibrary.device.motion_sense_hrv_plus.MotionSenseHrvPlus;
-import org.md2k.motionsenselibrary.device.motion_sense_hrv_plus_gen2.MotionSenseHrvPlusGen2;
-import org.md2k.motionsenselibrary.device.motion_sense_hrv_plus_gen2.MotionSenseHrvPlusGen2IG;
-import org.md2k.motionsenselibrary.device.motion_sense_hrv_plus_gen2.MotionSenseHrvPlusGen2IR;
+import org.md2k.motionsenselibrary.device.v1.motion_sense.MotionSense;
+import org.md2k.motionsenselibrary.device.v1.motion_sense_hrv.MotionSenseHrv;
+import org.md2k.motionsenselibrary.device.v1.motion_sense_hrv_plus.MotionSenseHrvPlus;
+import org.md2k.motionsenselibrary.device.v2.motion_sense.MotionSenseV2;
+import org.md2k.motionsenselibrary.device.v2.motion_sense_hrv.MotionSenseHrvV2;
+import org.md2k.motionsenselibrary.device.v2.motion_sense_hrv_plus.MotionSenseHrvPlusV2;
+import org.md2k.motionsenselibrary.device.v2.motion_sense_hrv_plus_gen2.MotionSenseHrvPlusGen2;
+import org.md2k.motionsenselibrary.device.v2.motion_sense_hrv_plus_gen2.MotionSenseHrvPlusGen2IG;
+import org.md2k.motionsenselibrary.device.v2.motion_sense_hrv_plus_gen2.MotionSenseHrvPlusGen2IR;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -23,11 +28,10 @@ import java.util.concurrent.TimeUnit;
 
 import io.reactivex.Observable;
 import io.reactivex.ObservableSource;
-import io.reactivex.Observer;
-import io.reactivex.SingleSource;
 import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.functions.Function;
+import io.reactivex.schedulers.Schedulers;
 
 
 /**
@@ -56,8 +60,6 @@ import io.reactivex.functions.Function;
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 public abstract class Device {
-    private static final UUID VERSION_CHARACTERISTIC = UUID.fromString("da39d600-1d81-48e2-9c68-d0ae4bbd351f");
-    private static final String SERVICE_CHARACTERISTIC = "0000180f-0000-1000-8000-00805f9b34fb";
 
     protected DeviceInfo deviceInfo;
     private HashMap<SensorType, SensorInfo> sensorInfoArrayList;
@@ -68,6 +70,7 @@ public abstract class Device {
     private Disposable connectionStatusDisposable;
     private RxBleClient rxBleClient;
     private Disposable dataQualityDisposable;
+    private boolean isStarted;
 
     protected abstract Observable<RxBleConnection> setConfiguration(RxBleConnection rxBleConnection);
 
@@ -84,7 +87,7 @@ public abstract class Device {
 
     private Observable<Data> getDataQualityObservable() {
         dataQualities = createDataQualities();
-        if (dataQualities==null || dataQualities.size() == 0) return Observable.empty();
+        if (dataQualities == null || dataQualities.size() == 0) return Observable.empty();
         @SuppressWarnings("unchecked")
         Observable<Data>[] observables = new Observable[dataQualities.size()];
         for (int i = 0; i < dataQualities.size(); i++)
@@ -99,84 +102,53 @@ public abstract class Device {
     abstract protected ArrayList<DataQuality> createDataQualities();
 
 
-    public ArrayList<SensorInfo> getSensorInfo(){
-        ArrayList<SensorInfo> list=new ArrayList<>();
-        for(Map.Entry<SensorType, SensorInfo> s:sensorInfoArrayList.entrySet()){
+    public ArrayList<SensorInfo> getSensorInfo() {
+        ArrayList<SensorInfo> list = new ArrayList<>();
+        for (Map.Entry<SensorType, SensorInfo> s : sensorInfoArrayList.entrySet()) {
             list.add(s.getValue());
         }
         return list;
     }
+
     public SensorInfo getSensorInfo(SensorType sensorType) {
         return sensorInfoArrayList.get(sensorType);
     }
 
-    static DeviceInfo getDeviceInfo(RxBleClient rxBleClient, ScanResult scanResult) {
-        String deviceName = scanResult.getBleDevice().getName();
-        String deviceId = scanResult.getBleDevice().getMacAddress();
-        if (scanResult.getScanRecord().getServiceUuids() == null ||
-                scanResult.getScanRecord().getServiceUuids().size() != 1)
-            return null;
-        if (!scanResult.getScanRecord().getServiceUuids().get(0).toString().equals(
-                SERVICE_CHARACTERISTIC)) return null;
-        return getDeviceInfo(rxBleClient, deviceName, deviceId);
-    }
-
-    private static DeviceInfo getDeviceInfo(RxBleClient rxBleClient, String deviceName, String deviceId) {
-        return rxBleClient.getBleDevice(deviceId).establishConnection(false).flatMapSingle(rxBleConnection -> rxBleConnection.readCharacteristic(VERSION_CHARACTERISTIC)).map(new Function<byte[], DeviceInfo>() {
-            @Override
-            public DeviceInfo apply(byte[] bytes) {
-                if(bytes==null || bytes.length==0) return null;
-                Version version = new Version(bytes);
-                return new DeviceInfo(version.getType(), deviceId, deviceName, version);
-            }
-        }).onErrorResumeNext(new Function<Throwable, ObservableSource<? extends DeviceInfo>>() {
-            @Override
-            public ObservableSource<? extends DeviceInfo> apply(Throwable throwable) throws Exception {
-                return new ObservableSource<DeviceInfo>() {
-                    @Override
-                    public void subscribe(Observer<? super DeviceInfo> observer) {
-                        DeviceInfo deviceInfo;
-                        switch (deviceName) {
-                            case "EETech_Motion":
-                                deviceInfo = new DeviceInfo(DeviceType.MOTION_SENSE, deviceId, deviceName, new Version(DeviceType.MOTION_SENSE, 1,0,0));
-                                break;
-                            case "MotionSenseHRV":
-                                deviceInfo = new DeviceInfo(DeviceType.MOTION_SENSE_HRV, deviceId, deviceName, new Version(DeviceType.MOTION_SENSE, 1,0,0));
-                                break;
-                            case "MotionSenseHRV+":
-                                deviceInfo = new DeviceInfo(DeviceType.MOTION_SENSE_HRV_PLUS, deviceId, deviceName, new Version(DeviceType.MOTION_SENSE, 1,0,0));
-                                break;
-                            default:
-                                deviceInfo= null;
-                        }
-                        observer.onNext(deviceInfo);
-                        observer.onComplete();
-                    }
-                };
-            }
-        }).blockingFirst();
-
-    }
-
     static Device create(RxBleClient rxBleClient, DeviceInfo deviceInfo, DeviceSettings deviceSettings) {
-        switch (deviceInfo.getDeviceType()) {
-            case MOTION_SENSE:
-                return new MotionSense(rxBleClient, deviceInfo, deviceSettings);
-            case MOTION_SENSE_HRV:
-                return new MotionSenseHrv(rxBleClient, deviceInfo, deviceSettings);
-            case MOTION_SENSE_HRV_PLUS:
-                return new MotionSenseHrvPlus(rxBleClient, deviceInfo, deviceSettings);
-            case MOTION_SENSE_HRV_PLUS_GEN2_IG:
-                return new MotionSenseHrvPlusGen2IG(rxBleClient, deviceInfo, deviceSettings);
-            case MOTION_SENSE_HRV_PLUS_GEN2:
-                return new MotionSenseHrvPlusGen2(rxBleClient, deviceInfo, deviceSettings);
-            case MOTION_SENSE_HRV_PLUS_GEN2_IR:
-                return new MotionSenseHrvPlusGen2IR(rxBleClient, deviceInfo, deviceSettings);
-            default:
-                return new MotionSenseHrv(rxBleClient, deviceInfo, deviceSettings);
+        if(deviceInfo.getVersion().isVersion1()){
+            switch (deviceInfo.getVersion().getType()) {
+                case MOTION_SENSE:
+                    return new MotionSense(rxBleClient, deviceInfo, deviceSettings);
+                case MOTION_SENSE_HRV:
+                    return new MotionSenseHrv(rxBleClient, deviceInfo, deviceSettings);
+                case MOTION_SENSE_HRV_PLUS:
+                    return new MotionSenseHrvPlus(rxBleClient, deviceInfo, deviceSettings);
+                default:
+                    return new MotionSense(rxBleClient, deviceInfo, deviceSettings);
+            }
+
+        }else{
+            switch (deviceInfo.getVersion().getType()) {
+                case MOTION_SENSE:
+                    return new MotionSenseV2(rxBleClient, deviceInfo, deviceSettings);
+                case MOTION_SENSE_HRV:
+                    return new MotionSenseHrvV2(rxBleClient, deviceInfo, deviceSettings);
+                case MOTION_SENSE_HRV_PLUS:
+                    return new MotionSenseHrvPlusV2(rxBleClient, deviceInfo, deviceSettings);
+                case MOTION_SENSE_HRV_PLUS_GEN2:
+                    return new MotionSenseHrvPlusGen2(rxBleClient, deviceInfo, deviceSettings);
+                case MOTION_SENSE_HRV_PLUS_GEN2_IG:
+                    return new MotionSenseHrvPlusGen2IG(rxBleClient, deviceInfo, deviceSettings);
+                case MOTION_SENSE_HRV_PLUS_GEN2_IR:
+                    return new MotionSenseHrvPlusGen2IR(rxBleClient, deviceInfo, deviceSettings);
+                default:
+                    return new MotionSenseHrvV2(rxBleClient, deviceInfo, deviceSettings);
+
+        }
         }
     }
 
+    @SuppressWarnings("unused")
     DeviceSettings getDeviceSettings() {
         return deviceSettings;
     }
@@ -196,87 +168,113 @@ public abstract class Device {
     }
 
     private void connect() {
-        Log.d("abc","connecting...with delay = 1 sec");
         RxBleDevice bleDevice = rxBleClient.getBleDevice(deviceInfo.getDeviceId());
-        connectionDisposable = Observable.timer(1, TimeUnit.SECONDS).flatMap(new Function<Long, ObservableSource<RxBleConnection>>() {
-            @Override
-            public ObservableSource<RxBleConnection> apply(Long aLong) throws Exception {
-                return bleDevice.establishConnection(false);
-            }
-        }).flatMap(new Function<RxBleConnection, ObservableSource<RxBleConnection>>() {
-            @Override
-            public ObservableSource<RxBleConnection> apply(RxBleConnection rxBleConnection) throws Exception {
-                return setConfiguration(rxBleConnection);
-            }
-        })
-                .flatMap((Function<RxBleConnection, Observable<Data>>) this::getSensingObservable)
+        Log.e("error", "connect (start)=>  state = "+bleDevice.getConnectionState().name());
+        if(bleDevice.getConnectionState()!= RxBleConnection.RxBleConnectionState.DISCONNECTED) return;
+        connectionDisposable = Observable.timer(1, TimeUnit.SECONDS).flatMap((Function<Long, ObservableSource<RxBleConnection>>) aLong -> bleDevice.establishConnection(false)).flatMap((Function<RxBleConnection, ObservableSource<RxBleConnection>>) this::setConfiguration).flatMap((Function<RxBleConnection, Observable<Data>>) this::getSensingObservable)
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(this::onConnectionReceived, this::onConnectionFailure);
     }
 
-    public void start(ReceiveCallback receiveCallback) {
-        if (receiveCallbacks.contains(receiveCallback)) return;
-        receiveCallbacks.add(receiveCallback);
-        if (receiveCallbacks.size() > 1) return;
+    public void start(@NonNull ReceiveCallback receiveCallback) {
+        addListener(receiveCallback);
+        if (isStarted) return;
+        isStarted = true;
         startDataQuality();
         RxBleDevice bleDevice = rxBleClient.getBleDevice(deviceInfo.getDeviceId());
         connectionStatusDisposable = Observable.merge(Observable.just(bleDevice.getConnectionState()), bleDevice.observeConnectionStateChanges()).observeOn(AndroidSchedulers.mainThread())
                 .subscribe(rxBleConnectionState -> {
-                    Log.d("abc","status = "+rxBleConnectionState.toString());
+                    Log.e("error", "ConnectionStatusListener: (onChange): status = " + rxBleConnectionState.toString());
                     if (rxBleConnectionState == RxBleConnection.RxBleConnectionState.DISCONNECTED) {
                         reconnect();
                     }
                 }, throwable -> {
-                    Log.d("abc","error="+throwable.toString());
+                    Log.d("abc", "error=" + throwable.toString());
 
                 });
     }
 
     private void onConnectionReceived(Data data) {
         data.setDeviceInfo(deviceInfo);
-        for (ReceiveCallback receiveCallback : receiveCallbacks) {
-            try {
-                for (int i = 0; i < dataQualities.size(); i++) {
-                    dataQualities.get(i).addSample(data);
-                }
+        for (int i = 0; i < dataQualities.size(); i++) {
+            dataQualities.get(i).addSample(data);
+        }
+        SensorInfo sensorInfo = sensorInfoArrayList.get(data.getSensorType());
+        if(sensorInfo!=null) {
+            sensorInfo.setCount(sensorInfo.getCount() + 1);
+            sensorInfo.setLastSample(data.getSample());
+            sensorInfo.setLastSampleTime(data.getTimestamp());
+            if(sensorInfo.getStartSampleTime()==0) sensorInfo.setStartSampleTime(data.getTimestamp());
+            else
+                Log.d("info",sensorInfo.getSensorType()+" "+(double)(sensorInfo.getCount())*1000.0/(sensorInfo.getLastSampleTime()-sensorInfo.getStartSampleTime()));
+        }
 
+        for (ReceiveCallback receiveCallback : receiveCallbacks) {
+
+            try {
                 receiveCallback.onReceive(data);
             } catch (Exception e) {
+                Log.e("abc","onConnectionReceive: exception can't send data="+e.getMessage());
                 stop(receiveCallback);
             }
         }
     }
 
     private void reconnect() {
-        disconnect();
-        connect();
+        RxBleDevice bleDevice = rxBleClient.getBleDevice(deviceInfo.getDeviceId());
+        Log.e("error", "reconnect (start)=>  state = "+bleDevice.getConnectionState().name());
+        if(bleDevice.getConnectionState()!= RxBleConnection.RxBleConnectionState.DISCONNECTED)
+            disconnect();
+        else if(bleDevice.getConnectionState()== RxBleConnection.RxBleConnectionState.DISCONNECTED)
+            connect();
+        else Log.e("error", "inside reconnect => ble is not disconnected. state = "+bleDevice.getConnectionState().name());
     }
 
     private void onConnectionFailure(Throwable throwable) {
-        Log.e("abc", "onFailure: " + throwable.getMessage());
+        Log.e("error", "onConnectionFailure: " + throwable.getMessage());
         reconnect();
     }
 
     private void disconnect() {
-        Log.d("abc","disconnecting...");
-        if (connectionDisposable != null) {
-            connectionDisposable.dispose();
+        Log.d("abc", "disconnecting...");
+        RxBleDevice bleDevice = rxBleClient.getBleDevice(deviceInfo.getDeviceId());
+        Log.e("error", "disconnect (start)=>  state = "+bleDevice.getConnectionState().name());
+        if(bleDevice.getConnectionState()== RxBleConnection.RxBleConnectionState.DISCONNECTED)
+            return;
+        if(connectionDisposable==null) return;
+        try {
+            if (!connectionDisposable.isDisposed()) {
+                connectionDisposable.dispose();
+            }
+        }catch (Exception e){
+            Log.e("abc", connectionDisposable.isDisposed() ?"not disposed": "null message=" + e.getMessage());
         }
         connectionDisposable = null;
+        Log.e("error", "disconnect (end)=>  state = "+bleDevice.getConnectionState().name());
     }
 
-    public void stop(ReceiveCallback receiveCallback) {
+    public void addListener(@NonNull ReceiveCallback receiveCallback) {
+        if (receiveCallbacks.contains(receiveCallback)) return;
+        receiveCallbacks.add(receiveCallback);
+    }
+
+    public void removeListener(@NonNull ReceiveCallback receiveCallback) {
+        stop(receiveCallback);
+    }
+
+    public void stop(@NonNull ReceiveCallback receiveCallback) {
         receiveCallbacks.remove(receiveCallback);
         if (receiveCallbacks.size() == 0) stopAll();
     }
 
     void stopAll() {
+        isStarted = false;
         receiveCallbacks.clear();
-        if (connectionStatusDisposable != null) {
+        if (connectionStatusDisposable != null && !connectionStatusDisposable.isDisposed()) {
             connectionStatusDisposable.dispose();
         }
         connectionStatusDisposable = null;
-        if (dataQualityDisposable != null)
+        if (dataQualityDisposable != null && !dataQualityDisposable.isDisposed())
             dataQualityDisposable.dispose();
         dataQualityDisposable = null;
         disconnect();
@@ -289,66 +287,83 @@ public abstract class Device {
     protected SensorInfo createAccelerometerInfo() {
         return SensorInfo.builder().setSensorType(SensorType.ACCELEROMETER).setTitle("Accelerometer").setDescription("measures the 3 axes acceleration (x,y,z) applied to the device in g").setFields(new String[]{"X", "Y", "Z"}).setUnit("g").setRange(-4, 4).build();
     }
-    protected SensorInfo createAccelerometerDataQualityInfo(){
+
+    protected SensorInfo createAccelerometerDataQualityInfo() {
         return SensorInfo.builder().setSensorType(SensorType.ACCELEROMETER_DATA_QUALITY).setTitle("Data Quality (Accelerometer)").setDescription("measures the data quality of accelerometer values: [0=GOOD, 1=NO_DATA, 2=NOT_WORN, 3=LOOSE_ATTACHMENT]").setFields(new String[]{"DATA_QUALITY"}).setUnit("number").setRange(0, 3).build();
     }
-    protected SensorInfo createGyroscopeInfo(){
-        return SensorInfo.builder().setSensorType(SensorType.GYROSCOPE).setTitle("Gyroscope").setDescription("measure the rate of rotation around the device's local X, Y and Z axis in degree/second").setFields(new String[]{"X","Y", "Z"}).setUnit("degree/second").setRange(-1000, 1000).build();
+
+    protected SensorInfo createGyroscopeInfo() {
+        return SensorInfo.builder().setSensorType(SensorType.GYROSCOPE).setTitle("Gyroscope").setDescription("measure the rate of rotation around the device's local X, Y and Z axis in degree/second").setFields(new String[]{"X", "Y", "Z"}).setUnit("degree/second").setRange(-1000, 1000).build();
     }
-    protected SensorInfo createQuaternionInfo(){
-        return SensorInfo.builder().setSensorType(SensorType.QUATERNION).setTitle("Quaternion").setDescription("measure the rate of rotation around the device\'s local X, Y and Z axis").setFields(new String[]{"X","Y","Z"}).setUnit("degree/second").setRange(-1, 1).build();
+
+    protected SensorInfo createQuaternionInfo() {
+        return SensorInfo.builder().setSensorType(SensorType.QUATERNION).setTitle("Quaternion").setDescription("measure the rate of rotation around the device\'s local X, Y and Z axis").setFields(new String[]{"X", "Y", "Z"}).setUnit("degree/second").setRange(-1, 1).build();
     }
-    protected SensorInfo createMotionSequenceNumberInfo(int maxValue){
+
+    protected SensorInfo createMotionSequenceNumberInfo(int maxValue) {
         return SensorInfo.builder().setSensorType(SensorType.MOTION_SEQUENCE_NUMBER).setTitle("Seq Number(Motion)").setDescription("sequence number of the motion packet").setFields(new String[]{"SEQ"}).setUnit("number").setRange(0, maxValue).build();
     }
-    protected SensorInfo createMotionRawInfo(int length){
+
+    protected SensorInfo createMotionRawInfo(int length) {
         return SensorInfo.builder().setSensorType(SensorType.MOTION_RAW).setTitle("Raw (Motion)").setDescription("raw byte array from motion characteristics").setFields(fill(length)).setUnit("number").setRange(0, 255).build();
     }
-    protected SensorInfo createBatteryInfo(){
+
+    protected SensorInfo createBatteryInfo() {
         return SensorInfo.builder().setSensorType(SensorType.BATTERY).setTitle("Battery").setDescription("current battery level in percentage").setFields(new String[]{"LEVEL"}).setUnit("percentage").setRange(0, 100).build();
     }
-    protected SensorInfo createMagnetometerInfo(){
-        return SensorInfo.builder().setSensorType(SensorType.MAGNETOMETER).setTitle("Magnetometer").setDescription("measure magnetic field in the X, Y and Z axis in micro tesla").setFields(new String[]{"X","Y","Z"}).setUnit("micro tesla").setRange(-4900,4900).build();
-    }
-    protected SensorInfo createMagnetometerSensitivityInfo(){
-        return SensorInfo.builder().setSensorType(SensorType.MAGNETOMETER_SENSITIVITY).setTitle("Magnetometer Sensitivity").setDescription("measure sensitivity of the magnetic field in m").setFields(new String[]{"X","Y","Z"}).setUnit("micro tesla").setRange(-4900,4900).build();
-    }
-    protected SensorInfo createMagnetometerSequenceNumberInfo(int maxValue){
-        return SensorInfo.builder().setSensorType(SensorType.MAGNETOMETER_SEQUENCE_NUMBER).setTitle("Seq Number(Mag)").setDescription("sequence number of the magnetometer packet").setFields(new String[]{"SEC"}).setUnit("number").setRange(0,maxValue).build();
-    }
-    protected SensorInfo createMagnetometerRawInfo(int length){
-        return SensorInfo.builder().setSensorType(SensorType.MAGNETOMETER_RAW).setTitle("Raw (Magnetometer)").setDescription("raw byte array from magnetometer characteristics").setFields(fill(length)).setUnit("number").setRange(0,255).build();
-    }
-    protected SensorInfo createPPGInfo(String description, String[] fields){
-        return SensorInfo.builder().setSensorType(SensorType.PPG).setTitle("PPG").setDescription(description).setFields(fields).setUnit("number").setRange(0,250000).build();
-    }
-    protected SensorInfo createPPGFilteredInfo(String description, String[] fields){
-        return SensorInfo.builder().setSensorType(SensorType.PPG_FILTERED).setTitle("PPG Filtered").setDescription(description).setFields(fields).setUnit("number").setRange(-250,250).build();
+
+    protected SensorInfo createMagnetometerInfo() {
+        return SensorInfo.builder().setSensorType(SensorType.MAGNETOMETER).setTitle("Magnetometer").setDescription("measure magnetic field in the X, Y and Z axis in micro tesla").setFields(new String[]{"X", "Y", "Z"}).setUnit("micro tesla").setRange(-400, 400).build();
     }
 
-    protected SensorInfo createPPGDataQualityInfo(){
+    protected SensorInfo createMagnetometerSensitivityInfo() {
+        return SensorInfo.builder().setSensorType(SensorType.MAGNETOMETER_SENSITIVITY).setTitle("Magnetometer Sensitivity").setDescription("measure sensitivity of the magnetic field in m").setFields(new String[]{"X", "Y", "Z"}).setUnit("micro tesla").setRange(-400, 400).build();
+    }
+
+    protected SensorInfo createMagnetometerSequenceNumberInfo(int maxValue) {
+        return SensorInfo.builder().setSensorType(SensorType.MAGNETOMETER_SEQUENCE_NUMBER).setTitle("Seq Number(Mag)").setDescription("sequence number of the magnetometer packet").setFields(new String[]{"SEC"}).setUnit("number").setRange(0, maxValue).build();
+    }
+
+    protected SensorInfo createMagnetometerRawInfo(int length) {
+        return SensorInfo.builder().setSensorType(SensorType.MAGNETOMETER_RAW).setTitle("Raw (Magnetometer)").setDescription("raw byte array from magnetometer characteristics").setFields(fill(length)).setUnit("number").setRange(0, 255).build();
+    }
+
+    protected SensorInfo createPPGInfo(String description, String[] fields) {
+        return SensorInfo.builder().setSensorType(SensorType.PPG).setTitle("PPG").setDescription(description).setFields(fields).setUnit("number").setRange(0, 250000).build();
+    }
+
+    protected SensorInfo createPPGFilteredInfo(String description, String[] fields) {
+        return SensorInfo.builder().setSensorType(SensorType.PPG_FILTERED).setTitle("PPG Filtered").setDescription(description).setFields(fields).setUnit("number").setRange(-250, 250).build();
+    }
+
+    protected SensorInfo createPPGDataQualityInfo() {
         return SensorInfo.builder().setSensorType(SensorType.PPG_DATA_QUALITY).setTitle("Data Quality (PPG)").setDescription("measures the data quality of ppg: [0=GOOD, 1=NO_DATA, 2=NOT_WORN, 3=LOOSE_ATTACHMENT]").setFields(new String[]{"DATA_QUALITY"}).setUnit("number").setRange(0, 3).build();
     }
-    protected SensorInfo createPPGSequenceNumberInfo(int maxValue){
-        return SensorInfo.builder().setSensorType(SensorType.PPG_SEQUENCE_NUMBER).setTitle("Seq Number(PPG)").setDescription("sequence number of the ppg packet").setFields(new String[]{"SEQ"}).setUnit("number").setRange(0,maxValue).build();
-    }
-    protected SensorInfo createPPGRawInfo(int length){
-        return SensorInfo.builder().setSensorType(SensorType.PPG_RAW).setTitle("Raw (PPG)").setDescription("raw byte array from ppg characteristics").setFields(fill(length)).setUnit("number").setRange(0,255).build();
-    }
-    protected SensorInfo createPPGDcInfo(String description, String[] fields){
-        return SensorInfo.builder().setSensorType(SensorType.PPG_DC).setTitle("PPG DC").setDescription(description).setFields(fields).setUnit("number").setRange(-500,500).build();
-    }
-    protected SensorInfo createPPGDcSequenceNumberInfo(int length){
-        return SensorInfo.builder().setSensorType(SensorType.PPG_DC_SEQUENCE_NUMBER).setTitle("Seq Number(PPG DC)").setDescription("sequence number of the ppg dc packet").setFields(new String[]{"SEQ"}).setUnit("number").setRange(0,length).build();
-    }
-    protected SensorInfo createPPGDcRawInfo(int length){
-        return SensorInfo.builder().setSensorType(SensorType.PPG_DC_RAW).setTitle("Raw (PPG DC)").setDescription("raw byte array from ppg dc characteristics").setFields(fill(length)).setUnit("number").setRange(0,255).build();
+
+    protected SensorInfo createPPGSequenceNumberInfo(int maxValue) {
+        return SensorInfo.builder().setSensorType(SensorType.PPG_SEQUENCE_NUMBER).setTitle("Seq Number(PPG)").setDescription("sequence number of the ppg packet").setFields(new String[]{"SEQ"}).setUnit("number").setRange(0, maxValue).build();
     }
 
-    private String[] fill(int length){
+    protected SensorInfo createPPGRawInfo(int length) {
+        return SensorInfo.builder().setSensorType(SensorType.PPG_RAW).setTitle("Raw (PPG)").setDescription("raw byte array from ppg characteristics").setFields(fill(length)).setUnit("number").setRange(0, 255).build();
+    }
+
+    protected SensorInfo createPPGDcInfo(String description, String[] fields) {
+        return SensorInfo.builder().setSensorType(SensorType.PPG_DC).setTitle("PPG DC").setDescription(description).setFields(fields).setUnit("number").setRange(-500, 500).build();
+    }
+
+    protected SensorInfo createPPGDcSequenceNumberInfo(int length) {
+        return SensorInfo.builder().setSensorType(SensorType.PPG_DC_SEQUENCE_NUMBER).setTitle("Seq Number(PPG DC)").setDescription("sequence number of the ppg dc packet").setFields(new String[]{"SEQ"}).setUnit("number").setRange(0, length).build();
+    }
+
+    protected SensorInfo createPPGDcRawInfo(int length) {
+        return SensorInfo.builder().setSensorType(SensorType.PPG_DC_RAW).setTitle("Raw (PPG DC)").setDescription("raw byte array from ppg dc characteristics").setFields(fill(length)).setUnit("number").setRange(0, 255).build();
+    }
+
+    private String[] fill(int length) {
         String[] filled = new String[length];
-        for(int i=0;i<length;i++){
-            filled[i]="C"+ i;
+        for (int i = 0; i < length; i++) {
+            filled[i] = "C" + i;
         }
         return filled;
     }

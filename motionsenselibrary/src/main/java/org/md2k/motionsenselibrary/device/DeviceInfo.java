@@ -1,5 +1,7 @@
 package org.md2k.motionsenselibrary.device;
 
+import androidx.annotation.NonNull;
+
 /*
  * Copyright (c) 2016, The University of Memphis, MD2K Center
  * - Syed Monowar Hossain <monowar.hossain@gmail.com>
@@ -27,20 +29,14 @@ package org.md2k.motionsenselibrary.device;
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 public class DeviceInfo {
-    private DeviceType deviceType;
-    private String deviceId;
     private String deviceName;
+    private String deviceId;
     private Version version;
 
-    public DeviceInfo(DeviceType deviceType, String deviceId, String deviceName, Version version) {
-        this.deviceType = deviceType;
+    public DeviceInfo(String deviceName, String deviceId, Version version) {
         this.deviceId = deviceId;
         this.deviceName = deviceName;
         this.version = version;
-    }
-
-    public DeviceType getDeviceType() {
-        return deviceType;
     }
 
     public String getDeviceId() {
@@ -51,12 +47,26 @@ public class DeviceInfo {
         return deviceName;
     }
 
+
     public Version getVersion() {
         return version;
     }
 
+    @NonNull
     @Override
     public String toString(){
-        return deviceType.toString()+", "+deviceName+", "+deviceId+", "+version;
+        String res = "";
+        if(deviceName!=null){
+            res+=deviceName;
+        }
+        if(deviceId!=null){
+            if(res.length()!=0) res+=",";
+            res+=deviceId;
+        }
+        if(version!=null){
+            if(res.length()!=0) res+=",";
+            res+=version.toString();
+        }
+        return res;
     }
 }

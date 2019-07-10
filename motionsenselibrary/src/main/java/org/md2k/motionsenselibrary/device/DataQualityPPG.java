@@ -35,7 +35,7 @@ import io.reactivex.schedulers.Timed;
  */
 public class DataQualityPPG extends DataQuality {
     private ArrayList<Data> samples1=new ArrayList<>();
-private static final int DELAY = 3000;
+public static final int DELAY = 3000;
 
     private boolean[] isGood3Sec(ArrayList<Data> values) {
         double[] sum = new double[]{0, 0, 0};
