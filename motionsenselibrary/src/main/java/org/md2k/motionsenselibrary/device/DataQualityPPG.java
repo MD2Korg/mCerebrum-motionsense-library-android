@@ -59,7 +59,6 @@ public static final int DELAY = 3000;
         res[0] = count[0] < (int) (.34 * values.size());
         res[1] = count[1] < (int) (.34 * values.size());
         res[2] = count[2] < (int) (.34 * values.size());
-//        Log.d("data_quality_led","last 3 quality="+res[0]+" "+res[1]+" "+res[2]);
         return res;
     }
 
@@ -123,7 +122,6 @@ public static final int DELAY = 3000;
             }
 
             ArrayList<Data> last3Sec = getLast3Sec(samples1);
-//            Log.d("data_quality_led","last 3="+last3Sec.size());
             if (last3Sec.size() == 0) return DataQualityType.NO_DATA;
 
             boolean[] sec3mean = isGood3Sec(samples1);
@@ -134,7 +132,6 @@ public static final int DELAY = 3000;
             if (mean[0] < 5000 && mean[1] < 5000 && mean[2] < 5000) return DataQualityType.NOT_WORN;
 
             boolean check = mean[0] > mean[2] && mean[1] > mean[0] && mean[1] > mean[2];
-//            Log.d("data_quality_led_mean1",""+check);
             if (!check) return DataQualityType.LOOSE_ATTACHMENT;
 
             int diff;
@@ -144,7 +141,6 @@ public static final int DELAY = 3000;
                 diff = 50000;
             }
             boolean check1 = mean[0] - mean[2] > 50000 && mean[1] - mean[0] > diff;
-//            Log.d("data_quality_led_mean2",""+check1);
             if (!check1) return DataQualityType.LOOSE_ATTACHMENT;
 
             if (sec3mean[0] && new Bandpass(getSample(0)).getResult()) {

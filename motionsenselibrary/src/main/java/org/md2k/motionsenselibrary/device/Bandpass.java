@@ -63,8 +63,6 @@ public class Bandpass {
 
     public boolean getResult(){
         double value=getStdDev(output);
-//        Log.d("data_quality_led","std="+value);
-//        Log.d("data_quality_led","outputlength=" + output.length);
         return value >= 5;
     }
     private void convolve(){

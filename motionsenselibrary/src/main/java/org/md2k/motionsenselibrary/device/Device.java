@@ -9,6 +9,7 @@ import com.polidea.rxandroidble2.RxBleConnection;
 import com.polidea.rxandroidble2.RxBleDevice;
 import com.polidea.rxandroidble2.scan.ScanResult;
 
+import org.md2k.motionsenselibrary.MSConstants;
 import org.md2k.motionsenselibrary.device.v1.motion_sense.MotionSense;
 import org.md2k.motionsenselibrary.device.v1.motion_sense_hrv.MotionSenseHrv;
 import org.md2k.motionsenselibrary.device.v1.motion_sense_hrv_plus.MotionSenseHrvPlus;
@@ -169,7 +170,7 @@ public abstract class Device {
 
     private void connect() {
         RxBleDevice bleDevice = rxBleClient.getBleDevice(deviceInfo.getDeviceId());
-        Log.e("error", "connect (start)=>  state = "+bleDevice.getConnectionState().name());
+        if(MSConstants.DEBUG) Log.e("error", "connect (start)=>  state = "+bleDevice.getConnectionState().name());
         if(bleDevice.getConnectionState()!= RxBleConnection.RxBleConnectionState.DISCONNECTED) return;
         connectionDisposable = Observable.timer(1, TimeUnit.SECONDS).flatMap((Function<Long, ObservableSource<RxBleConnection>>) aLong -> bleDevice.establishConnection(false)).flatMap((Function<RxBleConnection, ObservableSource<RxBleConnection>>) this::setConfiguration).flatMap((Function<RxBleConnection, Observable<Data>>) this::getSensingObservable)
                 .observeOn(AndroidSchedulers.mainThread())
@@ -184,12 +185,12 @@ public abstract class Device {
         RxBleDevice bleDevice = rxBleClient.getBleDevice(deviceInfo.getDeviceId());
         connectionStatusDisposable = Observable.merge(Observable.just(bleDevice.getConnectionState()), bleDevice.observeConnectionStateChanges()).observeOn(AndroidSchedulers.mainThread())
                 .subscribe(rxBleConnectionState -> {
-                    Log.e("error", "ConnectionStatusListener: (onChange): status = " + rxBleConnectionState.toString());
+                    if(MSConstants.DEBUG) Log.e("error", "ConnectionStatusListener: (onChange): status = " + rxBleConnectionState.toString());
                     if (rxBleConnectionState == RxBleConnection.RxBleConnectionState.DISCONNECTED) {
                         reconnect();
                     }
                 }, throwable -> {
-                    Log.d("abc", "error=" + throwable.toString());
+                    if(MSConstants.DEBUG) Log.d("abc", "error=" + throwable.toString());
 
                 });
     }
@@ -206,7 +207,7 @@ public abstract class Device {
             sensorInfo.setLastSampleTime(data.getTimestamp());
             if(sensorInfo.getStartSampleTime()==0) sensorInfo.setStartSampleTime(data.getTimestamp());
             else
-                Log.d("info",sensorInfo.getSensorType()+" "+(double)(sensorInfo.getCount())*1000.0/(sensorInfo.getLastSampleTime()-sensorInfo.getStartSampleTime()));
+            if(MSConstants.DEBUG) Log.d("info",sensorInfo.getSensorType()+" "+(double)(sensorInfo.getCount())*1000.0/(sensorInfo.getLastSampleTime()-sensorInfo.getStartSampleTime()));
         }
 
         for (ReceiveCallback receiveCallback : receiveCallbacks) {
@@ -214,7 +215,7 @@ public abstract class Device {
             try {
                 receiveCallback.onReceive(data);
             } catch (Exception e) {
-                Log.e("abc","onConnectionReceive: exception can't send data="+e.getMessage());
+                if(MSConstants.DEBUG) Log.e("abc","onConnectionReceive: exception can't send data="+e.getMessage());
                 stop(receiveCallback);
             }
         }
@@ -222,23 +223,23 @@ public abstract class Device {
 
     private void reconnect() {
         RxBleDevice bleDevice = rxBleClient.getBleDevice(deviceInfo.getDeviceId());
-        Log.e("error", "reconnect (start)=>  state = "+bleDevice.getConnectionState().name());
+        if(MSConstants.DEBUG) Log.e("error", "reconnect (start)=>  state = "+bleDevice.getConnectionState().name());
         if(bleDevice.getConnectionState()!= RxBleConnection.RxBleConnectionState.DISCONNECTED)
             disconnect();
         else if(bleDevice.getConnectionState()== RxBleConnection.RxBleConnectionState.DISCONNECTED)
             connect();
-        else Log.e("error", "inside reconnect => ble is not disconnected. state = "+bleDevice.getConnectionState().name());
+        else if(MSConstants.DEBUG) Log.e("error", "inside reconnect => ble is not disconnected. state = "+bleDevice.getConnectionState().name());
     }
 
     private void onConnectionFailure(Throwable throwable) {
-        Log.e("error", "onConnectionFailure: " + throwable.getMessage());
+        if(MSConstants.DEBUG) Log.e("error", "onConnectionFailure: " + throwable.getMessage());
         reconnect();
     }
 
     private void disconnect() {
-        Log.d("abc", "disconnecting...");
+        if(MSConstants.DEBUG) Log.d("abc", "disconnecting...");
         RxBleDevice bleDevice = rxBleClient.getBleDevice(deviceInfo.getDeviceId());
-        Log.e("error", "disconnect (start)=>  state = "+bleDevice.getConnectionState().name());
+        if(MSConstants.DEBUG) Log.e("error", "disconnect (start)=>  state = "+bleDevice.getConnectionState().name());
         if(bleDevice.getConnectionState()== RxBleConnection.RxBleConnectionState.DISCONNECTED)
             return;
         if(connectionDisposable==null) return;
@@ -247,10 +248,10 @@ public abstract class Device {
                 connectionDisposable.dispose();
             }
         }catch (Exception e){
-            Log.e("abc", connectionDisposable.isDisposed() ?"not disposed": "null message=" + e.getMessage());
+            if(MSConstants.DEBUG) Log.e("abc", connectionDisposable.isDisposed() ?"not disposed": "null message=" + e.getMessage());
         }
         connectionDisposable = null;
-        Log.e("error", "disconnect (end)=>  state = "+bleDevice.getConnectionState().name());
+        if(MSConstants.DEBUG) Log.e("error", "disconnect (end)=>  state = "+bleDevice.getConnectionState().name());
     }
 
     public void addListener(@NonNull ReceiveCallback receiveCallback) {

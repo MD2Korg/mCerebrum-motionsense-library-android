@@ -14,6 +14,8 @@ import com.polidea.rxandroidble2.scan.ScanFilter;
 import com.polidea.rxandroidble2.scan.ScanResult;
 import com.polidea.rxandroidble2.scan.ScanSettings;
 
+import org.md2k.motionsenselibrary.MSConstants;
+
 import java.io.IOException;
 import java.net.SocketException;
 import java.util.ArrayList;
@@ -76,7 +78,7 @@ public class MotionSenseManager {
                 return;
             }
 */
-            Log.e("error","Undeliverable exception received, not sure what to do"+e.getMessage());
+            if(MSConstants.DEBUG) Log.e("error","Undeliverable exception received, not sure what to do"+e.getMessage());
         });
     }
 
@@ -131,7 +133,7 @@ public class MotionSenseManager {
                 .filter(scanResult -> !deviceAddresses.contains(scanResult.getBleDevice().getMacAddress()))
                 .map(scanResult -> {
                     deviceAddresses.add(scanResult.getBleDevice().getMacAddress());
-                    Log.d("scan", "deviceId=" + scanResult.getBleDevice().getMacAddress()+" deviceName="+scanResult.getBleDevice().getName());
+                    if(MSConstants.DEBUG) Log.d("scan", "deviceId=" + scanResult.getBleDevice().getMacAddress()+" deviceName="+scanResult.getBleDevice().getName());
                     return scanResult;
                 })
                 .observeOn(AndroidSchedulers.mainThread())
@@ -170,7 +172,7 @@ public class MotionSenseManager {
                     .readCharacteristic(UUID.fromString(VERSION_CHARACTERISTIC)))
                     .map(bytes -> {
                         if (bytes == null || bytes.length == 0) {
-                            Log.e("error", "version byte = " + bytes);
+                            if(MSConstants.DEBUG) Log.e("error", "version byte = " + bytes);
                             throw new Exception("abc");
                         } else return new Version(bytes);
 //                    return new DeviceInfo(version.getType(), deviceId, deviceName, version);

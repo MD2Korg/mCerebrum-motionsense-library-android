@@ -76,7 +76,6 @@ class CharacteristicMotion extends Characteristics {
         return sample;
     }
     private double convertQuaternionToSI(double x){
-        Log.d("mag","x="+x);
         return (2.0*x)/(65535.0) - 1;
     }
     private double[] getQuaternion(byte[] bytes) {

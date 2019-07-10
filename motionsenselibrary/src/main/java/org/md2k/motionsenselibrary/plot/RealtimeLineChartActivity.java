@@ -47,6 +47,7 @@ import com.github.mikephil.charting.highlight.Highlight;
 import com.github.mikephil.charting.interfaces.datasets.ILineDataSet;
 import com.github.mikephil.charting.listener.OnChartValueSelectedListener;
 
+import org.md2k.motionsenselibrary.MSConstants;
 import org.md2k.motionsenselibrary.R;
 
 import java.util.ArrayList;
@@ -258,12 +259,12 @@ public abstract class RealtimeLineChartActivity extends FragmentActivity impleme
 
     @Override
     public void onValueSelected(Entry e, Highlight h) {
-        Log.i("Entry selected", e.toString());
+        if(MSConstants.DEBUG)   Log.i("Entry selected", e.toString());
     }
 
     @Override
     public void onNothingSelected() {
-        Log.i("Nothing selected", "Nothing selected.");
+        if(MSConstants.DEBUG) Log.i("Nothing selected", "Nothing selected.");
     }
 
     @Override
