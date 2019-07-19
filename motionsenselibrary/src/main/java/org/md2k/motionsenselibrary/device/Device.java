@@ -172,7 +172,7 @@ public abstract class Device {
         RxBleDevice bleDevice = rxBleClient.getBleDevice(deviceInfo.getDeviceId());
         if(MSConstants.DEBUG) Log.e("error", "connect (start)=>  state = "+bleDevice.getConnectionState().name());
         if(bleDevice.getConnectionState()!= RxBleConnection.RxBleConnectionState.DISCONNECTED) return;
-        connectionDisposable = Observable.timer(1, TimeUnit.SECONDS).flatMap((Function<Long, ObservableSource<RxBleConnection>>) aLong -> bleDevice.establishConnection(false)).flatMap((Function<RxBleConnection, ObservableSource<RxBleConnection>>) this::setConfiguration).flatMap((Function<RxBleConnection, Observable<Data>>) this::getSensingObservable)
+        connectionDisposable = Observable.timer(3, TimeUnit.SECONDS).flatMap((Function<Long, ObservableSource<RxBleConnection>>) aLong -> bleDevice.establishConnection(false)).flatMap((Function<RxBleConnection, ObservableSource<RxBleConnection>>) this::setConfiguration).flatMap((Function<RxBleConnection, Observable<Data>>) this::getSensingObservable)
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(this::onConnectionReceived, this::onConnectionFailure);
     }
